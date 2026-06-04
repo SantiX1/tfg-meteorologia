@@ -2,6 +2,7 @@ import asyncio
 from datetime import date
 
 import httpx
+from tenacity import retry, retry_if_exception, stop_after_attempt, wait_exponential
 
 FORECAST_URL = "https://api.open-meteo.com/v1/forecast"
 ARCHIVE_URL = "https://archive-api.open-meteo.com/v1/archive"
@@ -22,6 +23,16 @@ async def get_forecast(latitude: float, longitude: float) -> dict:
         return response.json()
 
 
+def _is_retryable(exc: httpx.HTTPStatusError) -> bool:
+    return exc.response.status_code in (429, 502)
+
+
+@retry(
+    stop=stop_after_attempt(5),
+    wait=wait_exponential(multiplier=2, min=4, max=60),
+    retry=retry_if_exception(_is_retryable),
+    reraise=True,
+)
 async def _fetch_decade(
     client: httpx.AsyncClient,
     latitude: float,
@@ -55,7 +66,7 @@ async def get_historical(latitude: float, longitude: float, day_of_year: int) ->
         year += 10
 
     results: list[dict] = []
-    async with httpx.AsyncClient(timeout=30.0) as client:
+    async with httpx.AsyncClient(timeout=60.0) as client:
         for i, (s, e) in enumerate(decades):
             if i > 0:
                 await asyncio.sleep(0.5)
