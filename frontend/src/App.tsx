@@ -5,167 +5,176 @@
  */
 
 import React, { useState, useMemo } from 'react';
-import { 
-  CloudSun, 
-  CloudRain, 
-  Sun, 
-  Search, 
-  Calendar, 
-  TrendingUp, 
-  TrendingDown, 
-  AlertTriangle, 
-  Droplets, 
+import {
+  CloudSun,
+  CloudRain,
+  Sun,
+  Search,
+  Calendar,
+  TrendingUp,
+  TrendingDown,
+  AlertTriangle,
+  Droplets,
   CheckCircle,
   Thermometer,
   MapPin,
   X,
-  ChevronRight,
   RefreshCw,
-  Info
 } from 'lucide-react';
-import { 
-  ResponsiveContainer, 
-  AreaChart, 
-  Area, 
-  XAxis, 
-  YAxis, 
-  Tooltip, 
+import {
+  ResponsiveContainer,
+  AreaChart,
+  Area,
+  XAxis,
+  YAxis,
+  Tooltip,
   CartesianGrid
 } from 'recharts';
+import { fetchWeather } from './services/api';
+import type { WeatherResponse } from './services/api';
 
-// Objecto de Datos de Prueba (Mock Data) según lo requerido por el prompt
-const MOCK_DATA = {
-  "Sevilla": {
-    name: "Sevilla",
-    region: "Andalucía",
-    today: {
-      date: "26 de Mayo, 2026",
-      weather: "clear",
-      tempMax: 41,
-      tempMaxHistory: 34, // +7°C Anomalía (Exceso)
-      tempMin: 24,
-      tempMinHistory: 18, // +6°C Anomalía (Exceso)
-    },
-    weeklyPluviometria: 5,
-    weeklyPluviometriaHistory: 10, // Diferencia de -5% (Normal)
-    forecast: [
-      { day: "Mié", date: "27 May", weather: "clear", tempMax: 42, tempMaxHistory: 34, tempMin: 25, tempMinHistory: 18 },
-      { day: "Jue", date: "28 May", weather: "clear", tempMax: 40, tempMaxHistory: 34, tempMin: 23, tempMinHistory: 18 },
-      { day: "Vie", date: "29 May", weather: "clear", tempMax: 39, tempMaxHistory: 35, tempMin: 22, tempMinHistory: 18 },
-      { day: "Sáb", date: "30 May", weather: "cloudy", tempMax: 38, tempMaxHistory: 35, tempMin: 21, tempMinHistory: 19 },
-      { day: "Dom", date: "31 May", weather: "clear", tempMax: 36, tempMaxHistory: 35, tempMin: 20, tempMinHistory: 19 },
-      { day: "Lun", date: "01 Jun", weather: "clear", tempMax: 35, tempMaxHistory: 36, tempMin: 19, tempMinHistory: 19 }
-    ]
-  },
-  "Madrid": {
-    name: "Madrid",
-    region: "Comunidad de Madrid",
-    today: {
-      date: "26 de Mayo, 2026",
-      weather: "rainy",
-      tempMax: 24,
-      tempMaxHistory: 23, // +1°C (Normal)
-      tempMin: 12,
-      tempMinHistory: 11, // +1°C (Normal)
-    },
-    weeklyPluviometria: 52,
-    weeklyPluviometriaHistory: 18, // +34% Diferencia (Anomalía por Exceso de precipitación)
-    forecast: [
-      { day: "Mié", date: "27 May", weather: "rainy", tempMax: 22, tempMaxHistory: 23, tempMin: 11, tempMinHistory: 11 },
-      { day: "Jue", date: "28 May", weather: "rainy", tempMax: 19, tempMaxHistory: 23, tempMin: 9, tempMinHistory: 10 },
-      { day: "Vie", date: "29 May", weather: "cloudy", tempMax: 20, tempMaxHistory: 22, tempMin: 10, tempMinHistory: 11 },
-      { day: "Sáb", date: "30 May", weather: "clear", tempMax: 21, tempMaxHistory: 22, tempMin: 11, tempMinHistory: 11 },
-      { day: "Dom", date: "31 May", weather: "clear", tempMax: 23, tempMaxHistory: 22, tempMin: 12, tempMinHistory: 12 },
-      { day: "Lun", date: "01 Jun", weather: "clear", tempMax: 24, tempMaxHistory: 23, tempMin: 13, tempMinHistory: 12 }
-    ]
-  },
-  "Logroño": {
-    name: "Logroño",
-    region: "La Rioja",
-    today: {
-      date: "26 de Mayo, 2026",
-      weather: "cloudy",
-      tempMax: 13,
-      tempMaxHistory: 21, // -8°C Anomalía (Defecto/Ola de frío)
-      tempMin: 4,
-      tempMinHistory: 9,  // -5°C Anomalía (Defecto/Ola de frío)
-    },
-    weeklyPluviometria: 65,
-    weeklyPluviometriaHistory: 60, // Diferencia de +5% (Normal)
-    forecast: [
-      { day: "Mié", date: "27 May", weather: "cloudy", tempMax: 12, tempMaxHistory: 21, tempMin: 3, tempMinHistory: 9 },
-      { day: "Jue", date: "28 May", weather: "rainy", tempMax: 11, tempMaxHistory: 21, tempMin: 2, tempMinHistory: 9 },
-      { day: "Vie", date: "29 May", weather: "rainy", tempMax: 13, tempMaxHistory: 20, tempMin: 3, tempMinHistory: 8 },
-      { day: "Sáb", date: "30 May", weather: "cloudy", tempMax: 15, tempMaxHistory: 20, tempMin: 4, tempMinHistory: 8 },
-      { day: "Dom", date: "31 May", weather: "clear", tempMax: 18, tempMaxHistory: 20, tempMin: 6, tempMinHistory: 8 },
-      { day: "Lun", date: "01 Jun", weather: "clear", tempMax: 20, tempMaxHistory: 20, tempMin: 8, tempMinHistory: 9 }
-    ]
-  }
+// ── Date helpers ──────────────────────────────────────────────────────────────
+
+const DAYS_ES = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'];
+const MONTHS_LONG = [
+  'Enero','Febrero','Marzo','Abril','Mayo','Junio',
+  'Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre',
+];
+const MONTHS_SHORT = [
+  'Ene','Feb','Mar','Abr','May','Jun',
+  'Jul','Ago','Sep','Oct','Nov','Dic',
+];
+
+// Parse "YYYY-MM-DD" without timezone shift
+const parseDate = (s: string) => {
+  const [y, m, d] = s.split('-').map(Number);
+  return new Date(y, m - 1, d);
 };
+
+// Matches Python's date.timetuple().tm_yday (1-based)
+const getDayOfYear = (d: Date) => {
+  const start = new Date(d.getFullYear(), 0, 0); // Dec 31 of previous year
+  return Math.floor((d.getTime() - start.getTime()) / 86_400_000);
+};
+
+const weatherFromPrecip = (precip: number): 'clear' | 'cloudy' | 'rainy' => {
+  if (precip >= 5) return 'rainy';
+  if (precip >= 0.5) return 'cloudy';
+  return 'clear';
+};
+
+// ── Map backend response → internal cityData shape ────────────────────────────
+
+function mapResponseToCityData(r: WeatherResponse) {
+  const normalByDoy: Record<number, { tmax_mean: number; tmin_mean: number; precip_mean: number }> =
+    Object.fromEntries(r.normals.map(n => [n.day_of_year, n]));
+
+  const mapDay = (day: WeatherResponse['forecast'][0]) => {
+    const d = parseDate(day.date);
+    const normal = normalByDoy[getDayOfYear(d)] ?? null;
+    return {
+      date: d,
+      weather: weatherFromPrecip(day.precip),
+      tempMax: Math.round(day.tmax),
+      tempMaxHistory: Math.round(normal?.tmax_mean ?? day.tmax),
+      tempMin: Math.round(day.tmin),
+      tempMinHistory: Math.round(normal?.tmin_mean ?? day.tmin),
+      precip: day.precip,
+    };
+  };
+
+  const todayRaw = mapDay(r.forecast[0]);
+  const todayDate = todayRaw.date;
+
+  const weeklyPluviometria = Math.round(r.forecast.reduce((s, d) => s + d.precip, 0) * 10) / 10;
+  const weeklyPluviometriaHistory = Math.round(r.normals.reduce((s, n) => s + n.precip_mean, 0) * 10) / 10;
+
+  return {
+    name: r.location.name,
+    region: r.location.region ?? r.location.country ?? '',
+    today: {
+      date: `${todayDate.getDate()} de ${MONTHS_LONG[todayDate.getMonth()]}, ${todayDate.getFullYear()}`,
+      weather: todayRaw.weather,
+      tempMax: todayRaw.tempMax,
+      tempMaxHistory: todayRaw.tempMaxHistory,
+      tempMin: todayRaw.tempMin,
+      tempMinHistory: todayRaw.tempMinHistory,
+    },
+    weeklyPluviometria,
+    weeklyPluviometriaHistory,
+    forecast: r.forecast.slice(1).map(day => {
+      const m = mapDay(day);
+      return {
+        day: DAYS_ES[m.date.getDay()],
+        date: `${m.date.getDate()} ${MONTHS_SHORT[m.date.getMonth()]}`,
+        weather: m.weather,
+        tempMax: m.tempMax,
+        tempMaxHistory: m.tempMaxHistory,
+        tempMin: m.tempMin,
+        tempMinHistory: m.tempMinHistory,
+      };
+    }),
+  };
+}
+
+// ── Component ─────────────────────────────────────────────────────────────────
 
 export default function App() {
   const [searchQuery, setSearchQuery] = useState('');
-  const [selectedCityName, setSelectedCityName] = useState<string | null>(null);
+  const [cityData, setCityData] = useState(null);
+  const [isLoading, setIsLoading] = useState(false);
   const [searchFocused, setSearchFocused] = useState(false);
   const [searchError, setSearchError] = useState('');
 
-  // Ciudades fijas para selección rápida
-  const featuredCities = ['Sevilla', 'Madrid', 'Logroño'];
+  const featuredCities = ['Sevilla', 'Madrid', 'Barcelona'];
 
-  const cityData = useMemo(() => {
-    if (!selectedCityName) return null;
-    return MOCK_DATA[selectedCityName as keyof typeof MOCK_DATA] || null;
-  }, [selectedCityName]);
-
-  const handleSearch = (e: React.FormEvent) => {
-    e.preventDefault();
-    const queryClean = searchQuery.trim().toLowerCase();
-    
-    // Buscar coincidencia en mock_data
-    const matchedCityKey = Object.keys(MOCK_DATA).find(
-      key => key.toLowerCase() === queryClean
-    );
-
-    if (matchedCityKey) {
-      setSelectedCityName(matchedCityKey);
+  const triggerSearch = async (query: string) => {
+    if (!query.trim() || isLoading) return;
+    setIsLoading(true);
+    setSearchError('');
+    try {
+      const response = await fetchWeather(query.trim());
+      setCityData(mapResponseToCityData(response));
       setSearchQuery('');
-      setSearchError('');
-    } else {
-      setSearchError('Localización no encontrada. Intenta con Sevilla, Madrid o Logroño.');
+    } catch (err) {
+      setSearchError(err instanceof Error ? err.message : 'Error desconocido. Inténtalo de nuevo.');
+    } finally {
+      setIsLoading(false);
     }
   };
 
+  const handleSearch = (e: React.FormEvent) => {
+    e.preventDefault();
+    triggerSearch(searchQuery);
+  };
+
   const handleSelectFeatured = (city: string) => {
-    setSelectedCityName(city);
-    setSearchQuery('');
     setSearchError('');
+    triggerSearch(city);
   };
 
   // Helper de iconos climáticos
   const getWeatherIcon = (type: string, className = "w-6 h-6") => {
     switch (type) {
       case 'clear':
-        return <Sun className={`${className} text-amber-400`} id={`icon-sun-${type}`} />;
+        return <Sun className={`${className} text-amber-400`} />;
       case 'rainy':
-        return <CloudRain className={`${className} text-blue-400`} id={`icon-rain-${type}`} />;
+        return <CloudRain className={`${className} text-blue-400`} />;
       case 'cloudy':
       default:
-        return <CloudSun className={`${className} text-slate-400`} id={`icon-cloud-${type}`} />;
+        return <CloudSun className={`${className} text-slate-400`} />;
     }
   };
 
-  // Lógica de Anomalías Térmicas (Máxima o Mínima: diferencia de +-5 o superior)
   const getTempAnomalyInfo = (current: number, history: number) => {
     const diff = current - history;
-    const isAnomalous = Math.abs(diff) >= 5;
     return {
-      isAnomalous,
+      isAnomalous: Math.abs(diff) >= 5,
       diff,
       type: diff >= 5 ? 'exceso' : diff <= -5 ? 'defecto' : 'normal',
     };
   };
 
-  // Lógica de Anomalías Pluviométricas según especificación de escala de porcentajes
   const getPluvioAnomalyInfo = (current: number, history: number) => {
     if (history === 0) {
       return {
@@ -217,7 +226,6 @@ export default function App() {
     }
   };
 
-  // Mapeo auxiliar de categorías a estilos Tailwind
   const getPluvioTailwindClasses = (categoria: string) => {
     switch (categoria) {
       case "Extremadamente seco":
@@ -259,41 +267,31 @@ export default function App() {
     }
   };
 
-  // Calcular anomalías para la ciudad seleccionada
   const anomalies = useMemo(() => {
     if (!cityData) return null;
     const tMax = getTempAnomalyInfo(cityData.today.tempMax, cityData.today.tempMaxHistory);
     const tMin = getTempAnomalyInfo(cityData.today.tempMin, cityData.today.tempMinHistory);
     const pluv = getPluvioAnomalyInfo(cityData.weeklyPluviometria, cityData.weeklyPluviometriaHistory);
-
-    const hasAnyAnomaly = tMax.isAnomalous || tMin.isAnomalous || pluv.alerta;
-
     return {
       max: tMax,
       min: tMin,
       pluviometria: pluv,
-      hasAnyAnomaly,
+      hasAnyAnomaly: tMax.isAnomalous || tMin.isAnomalous || pluv.alerta,
     };
   }, [cityData]);
 
-  // Construcción del Aviso General (Dinámico y reactivo a los valores históicos de la ciudad)
   const generalNotice = useMemo(() => {
     if (!cityData || !anomalies) return null;
-
     const messages: string[] = [];
 
     if (anomalies.max.isAnomalous) {
       const dir = anomalies.max.diff > 0 ? 'exceso de calor' : 'defecto por frío';
-      const dVal = Math.abs(anomalies.max.diff);
-      messages.push(`Temperatura Máxima extrema (${dir} de +${dVal}°C vs media histórica de ${cityData.today.tempMaxHistory}°C)`);
+      messages.push(`Temperatura Máxima extrema (${dir} de +${Math.abs(anomalies.max.diff)}°C vs media histórica de ${cityData.today.tempMaxHistory}°C)`);
     }
-
     if (anomalies.min.isAnomalous) {
       const dir = anomalies.min.diff > 0 ? 'exceso térmico nocturno' : 'defecto de frío extremo (heladas)';
-      const dVal = Math.abs(anomalies.min.diff);
-      messages.push(`Temperatura Mínima extrema (${dir} de +${dVal}°C de desviación vs histórica de ${cityData.today.tempMinHistory}°C)`);
+      messages.push(`Temperatura Mínima extrema (${dir} de +${Math.abs(anomalies.min.diff)}°C de desviación vs histórica de ${cityData.today.tempMinHistory}°C)`);
     }
-
     if (anomalies.pluviometria.alerta) {
       messages.push(`${anomalies.pluviometria.categoria} (${anomalies.pluviometria.mensaje_front})`);
     }
@@ -301,13 +299,12 @@ export default function App() {
     return {
       isAnomalous: anomalies.hasAnyAnomaly,
       title: anomalies.hasAnyAnomaly ? "AVISO DE ANOMALÍA CLIMÁTICA" : "ESTADO CLIMÁTICO ESTABLE",
-      description: anomalies.hasAnyAnomaly 
+      description: anomalies.hasAnyAnomaly
         ? `Se han detectado desviaciones climáticas significativas respecto a la histórica local: ${messages.join('. ')}.`
-        : "Todas las mediciones se encuentran dentro de las distribuciones históricas habituales para esta fecha (desviación < 5°C en temperatura y < 30% en pluviometría semanal)."
+        : "Todas las mediciones se encuentran dentro de las distribuciones históricas habituales para esta fecha (desviación < 5°C en temperatura y < 30% en pluviometría semanal).",
     };
   }, [cityData, anomalies]);
 
-  // Datos adaptados para Gráfico de Líneas/Área de Recharts
   const chartData = useMemo(() => {
     if (!cityData) return [];
     return [
@@ -324,32 +321,31 @@ export default function App() {
         "Máx Histórica": item.tempMaxHistory,
         "Mín Prevista": item.tempMin,
         "Mín Histórica": item.tempMinHistory,
-      }))
+      })),
     ];
   }, [cityData]);
 
   return (
-    <div 
-      id="app-container" 
+    <div
+      id="app-container"
       className="min-h-screen bg-slate-950 text-slate-100 flex flex-col justify-between items-center relative overflow-hidden font-sans select-none antialiased p-4 md:p-8"
     >
-      {/* Fondo Ambient Decorativo Minimalista */}
+      {/* Fondo Ambient Decorativo */}
       <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,_var(--tw-gradient-stops))] from-slate-900 via-slate-950 to-slate-950 z-0 opacity-100 pointer-events-none" />
       <div className="absolute top-0 left-1/2 -translate-x-1/2 w-full max-w-7xl h-96 bg-gradient-radial from-blue-500/10 via-amber-500/5 to-transparent blur-3xl rounded-full z-0 pointer-events-none" />
 
-      {/* Main Container */}
       <div className="w-full max-w-5xl mx-auto z-10 flex-grow flex flex-col justify-center">
-        
-        {/* PANTALLA INICIAL: Mientras no se ha elegido localización */}
+
+        {/* PANTALLA INICIAL */}
         {!cityData ? (
-          <div 
-            id="welcome-screen" 
+          <div
+            id="welcome-screen"
             className="w-full max-w-lg mx-auto bg-slate-900/40 backdrop-blur-xl border border-slate-800 rounded-3xl p-8 md:p-12 shadow-2xl text-center flex flex-col items-center gap-8 transition-all duration-500"
           >
-            {/* Cabecera / Icono */}
+            {/* Cabecera */}
             <div className="flex flex-col items-center gap-3">
-              <div 
-                id="brand-logo" 
+              <div
+                id="brand-logo"
                 className="w-16 h-16 bg-gradient-to-tr from-amber-400 to-orange-500 rounded-2xl flex items-center justify-center shadow-lg shadow-orange-500/20"
               >
                 <CloudSun className="w-10 h-10 text-slate-950 stroke-[2]" />
@@ -362,12 +358,12 @@ export default function App() {
               </p>
             </div>
 
-            {/* Buscador de Localizaciones */}
+            {/* Buscador */}
             <form onSubmit={handleSearch} className="w-full space-y-3 relative" id="search-form">
               <div className="relative">
                 <input
                   type="text"
-                  placeholder="Introduce una ciudad (Sevilla, Madrid, Logroño...)"
+                  placeholder="Busca cualquier ciudad del mundo..."
                   value={searchQuery}
                   onChange={(e) => {
                     setSearchQuery(e.target.value);
@@ -375,12 +371,12 @@ export default function App() {
                   }}
                   onFocus={() => setSearchFocused(true)}
                   onBlur={() => setTimeout(() => setSearchFocused(false), 200)}
-                  className="w-full bg-slate-950/70 border border-slate-700/80 rounded-2xl py-4 pl-12 pr-4 text-white placeholder-slate-500 focus:outline-none focus:border-amber-400 focus:ring-1 focus:ring-amber-400/30 transition-all text-sm"
+                  disabled={isLoading}
+                  className="w-full bg-slate-950/70 border border-slate-700/80 rounded-2xl py-4 pl-12 pr-4 text-white placeholder-slate-500 focus:outline-none focus:border-amber-400 focus:ring-1 focus:ring-amber-400/30 transition-all text-sm disabled:opacity-60"
                   id="search-input"
                 />
                 <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-500" />
-                
-                {searchQuery && (
+                {searchQuery && !isLoading && (
                   <button
                     type="button"
                     onClick={() => setSearchQuery('')}
@@ -393,33 +389,56 @@ export default function App() {
 
               {searchError && (
                 <p className="text-xs text-red-400 text-left pl-2 flex items-center gap-1.5" id="error-message">
-                  <AlertTriangle className="w-3.5 h-3.5" /> {searchError}
+                  <AlertTriangle className="w-3.5 h-3.5 shrink-0" /> {searchError}
                 </p>
               )}
 
               <button
                 type="submit"
-                className="w-full bg-white hover:bg-slate-100 text-slate-950 font-semibold py-3.5 px-6 rounded-2xl shadow-md cursor-pointer transition-all duration-200 active:scale-[0.98]"
+                disabled={isLoading || !searchQuery.trim()}
+                className="w-full bg-white hover:bg-slate-100 text-slate-950 font-semibold py-3.5 px-6 rounded-2xl shadow-md cursor-pointer transition-all duration-200 active:scale-[0.98] disabled:opacity-60 disabled:cursor-not-allowed flex items-center justify-center gap-2"
                 id="search-submit-btn"
               >
-                Analizar Clima
+                {isLoading ? (
+                  <>
+                    <RefreshCw className="w-4 h-4 animate-spin" />
+                    Analizando...
+                  </>
+                ) : 'Analizar Clima'}
               </button>
             </form>
 
+            {/* Ciudades destacadas */}
+            <div className="flex flex-col items-center gap-2 w-full">
+              <span className="text-xs text-slate-500">Búsquedas rápidas</span>
+              <div className="flex gap-2 flex-wrap justify-center">
+                {featuredCities.map(city => (
+                  <button
+                    key={city}
+                    onClick={() => handleSelectFeatured(city)}
+                    disabled={isLoading}
+                    className="px-3 py-1.5 text-xs bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-300 rounded-xl transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {city}
+                  </button>
+                ))}
+              </div>
+            </div>
+
             <div className="text-[10px] text-slate-600 font-mono mt-2">
-              Detección Climática v2.5 • España
+              Detección Climática v3.0 • Open-Meteo API
             </div>
           </div>
         ) : (
-          
-          /* VIEW 2: DASHBOARD CLIMÁTICO ACTIVO */
+
+          /* DASHBOARD CLIMÁTICO */
           <div className="space-y-6 transition-all duration-500" id="dashboard-view">
-            
-            {/* HEADER DEL DASHBOARD */}
+
+            {/* HEADER */}
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-slate-900/35 backdrop-blur-xl border border-slate-900 rounded-3xl p-6 shadow-xl">
               <div className="flex items-center gap-4">
                 <button
-                  onClick={() => setSelectedCityName(null)}
+                  onClick={() => setCityData(null)}
                   className="p-3 bg-slate-950 hover:bg-slate-800 border border-slate-800 rounded-2xl text-slate-400 hover:text-white cursor-pointer transition-all active:scale-95"
                   title="Volver a la búsqueda"
                   id="back-search-btn"
@@ -435,8 +454,6 @@ export default function App() {
                   </h1>
                 </div>
               </div>
-
-              {/* Fecha en Cabecera */}
               <div className="flex flex-wrap items-center gap-3">
                 <div className="flex items-center gap-2 px-4 py-2 bg-slate-950 border border-slate-800 rounded-2xl text-xs text-slate-400">
                   <Calendar className="w-4 h-4 text-slate-500" />
@@ -445,11 +462,11 @@ export default function App() {
               </div>
             </div>
 
-            {/* AVISO GENERAL DE ANOMALÍA O NORMALIDAD (Requisito) */}
-            <div 
+            {/* AVISO GENERAL */}
+            <div
               id="general-notice-banner"
               className={`rounded-3xl p-6 border backdrop-blur-xl transition-all duration-300 ${
-                generalNotice.isAnomalous 
+                generalNotice.isAnomalous
                   ? "bg-gradient-to-r from-red-950/70 via-orange-950/60 to-red-950/40 border-orange-500/40 shadow-lg shadow-orange-900/10"
                   : "bg-gradient-to-r from-slate-900/60 to-blue-950/40 border-slate-800"
               }`}
@@ -457,15 +474,13 @@ export default function App() {
               <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
                 <div className="flex items-start gap-4">
                   <div className={`p-3 rounded-2xl flex items-center justify-center shrink-0 mt-0.5 md:mt-0 ${
-                    generalNotice.isAnomalous 
-                      ? "bg-orange-500/20 text-orange-400 border border-orange-500/30" 
+                    generalNotice.isAnomalous
+                      ? "bg-orange-500/20 text-orange-400 border border-orange-500/30"
                       : "bg-blue-500/20 text-blue-400 border border-blue-500/30"
                   }`}>
-                    {generalNotice.isAnomalous ? (
-                      <AlertTriangle className="w-6 h-6 animate-pulse" />
-                    ) : (
-                      <CheckCircle className="w-6 h-6" />
-                    )}
+                    {generalNotice.isAnomalous
+                      ? <AlertTriangle className="w-6 h-6 animate-pulse" />
+                      : <CheckCircle className="w-6 h-6" />}
                   </div>
                   <div>
                     <h3 className={`text-sm font-bold tracking-wider uppercase ${
@@ -478,7 +493,6 @@ export default function App() {
                     </p>
                   </div>
                 </div>
-
                 {generalNotice.isAnomalous && (
                   <span className="shrink-0 text-[10px] font-black tracking-widest uppercase bg-orange-500 text-slate-950 px-2.5 py-1 rounded-full shadow-sm max-md:hidden">
                     Alerta Activa
@@ -487,14 +501,14 @@ export default function App() {
               </div>
             </div>
 
-            {/* TARJETAS PRINCIPALES DE DATOS CON LÓGICA DE ANOMALÍA */}
+            {/* TARJETAS PRINCIPALES */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6" id="metric-cards">
-              
-              {/* TARJETA 1: TEMPERATURA MÁXIMA PREVISTA HOY */}
-              <div 
+
+              {/* Temp Máxima */}
+              <div
                 id="card-max-temp"
                 className={`rounded-3xl p-6 border backdrop-blur-xl transition-all duration-300 flex flex-col justify-between min-h-[170px] ${
-                  (cityData.today.tempMax - cityData.today.tempMaxHistory) >= 5 
+                  (cityData.today.tempMax - cityData.today.tempMaxHistory) >= 5
                     ? "bg-gradient-to-br from-red-950/80 via-orange-950/70 to-red-950/40 border-orange-500/60 shadow-lg shadow-orange-500/5 text-orange-200"
                     : (cityData.today.tempMax - cityData.today.tempMaxHistory) <= -5
                     ? "bg-gradient-to-br from-blue-950/80 via-slate-900/70 to-blue-950/40 border-blue-500/60 shadow-lg shadow-blue-500/10 text-blue-200"
@@ -502,12 +516,10 @@ export default function App() {
                 }`}
               >
                 <div className="flex items-center justify-between">
-                  <span className="text-xs font-bold uppercase tracking-wider text-slate-300">
-                    Temp. Máxima prevista
-                  </span>
+                  <span className="text-xs font-bold uppercase tracking-wider text-slate-300">Temp. Máxima prevista</span>
                   <div className={`p-2 rounded-xl border ${
                     (cityData.today.tempMax - cityData.today.tempMaxHistory) >= 5
-                      ? "bg-orange-500/20 border-orange-500/30 text-orange-400" 
+                      ? "bg-orange-500/20 border-orange-500/30 text-orange-400"
                       : (cityData.today.tempMax - cityData.today.tempMaxHistory) <= -5
                       ? "bg-blue-500/20 border-blue-500/30 text-blue-400"
                       : "bg-emerald-500/20 border-emerald-500/30 text-emerald-400"
@@ -515,7 +527,6 @@ export default function App() {
                     <Thermometer className="w-4 h-4" />
                   </div>
                 </div>
-
                 <div className="my-3">
                   <div className="flex items-baseline gap-2">
                     <span className="text-5xl font-black tracking-tight shrink-0">
@@ -532,12 +543,10 @@ export default function App() {
                     ) : null}
                   </div>
                 </div>
-
                 <div className="border-t border-slate-800/60 pt-3 mt-1 text-xs flex justify-between items-center">
                   <span className="text-slate-400">Media Histórica:</span>
                   <span className="font-semibold text-white">{cityData.today.tempMaxHistory} ºC</span>
                 </div>
-
                 {(cityData.today.tempMax - cityData.today.tempMaxHistory) >= 5 ? (
                   <div className="text-[10px] uppercase font-bold text-orange-400 mt-2 flex items-center gap-1">
                     <AlertTriangle className="w-3.5 h-3.5" /> Anomalía por Calor (+5ºC)
@@ -553,11 +562,11 @@ export default function App() {
                 )}
               </div>
 
-              {/* TARJETA 2: TEMPERATURA MÍNIMA PREVISTA HOY */}
-              <div 
+              {/* Temp Mínima */}
+              <div
                 id="card-min-temp"
                 className={`rounded-3xl p-6 border backdrop-blur-xl transition-all duration-300 flex flex-col justify-between min-h-[170px] ${
-                  (cityData.today.tempMin - cityData.today.tempMinHistory) >= 5 
+                  (cityData.today.tempMin - cityData.today.tempMinHistory) >= 5
                     ? "bg-gradient-to-br from-red-950/80 via-orange-950/70 to-red-950/40 border-orange-500/60 shadow-lg shadow-orange-500/5 text-orange-200"
                     : (cityData.today.tempMin - cityData.today.tempMinHistory) <= -5
                     ? "bg-gradient-to-br from-blue-950/80 via-slate-900/70 to-blue-950/40 border-blue-500/60 shadow-lg shadow-blue-500/10 text-blue-200"
@@ -565,12 +574,10 @@ export default function App() {
                 }`}
               >
                 <div className="flex items-center justify-between">
-                  <span className="text-xs font-bold uppercase tracking-wider text-slate-300">
-                    Temp. Mínima prevista
-                  </span>
+                  <span className="text-xs font-bold uppercase tracking-wider text-slate-300">Temp. Mínima prevista</span>
                   <div className={`p-2 rounded-xl border ${
                     (cityData.today.tempMin - cityData.today.tempMinHistory) >= 5
-                      ? "bg-orange-500/20 border-orange-500/30 text-orange-400" 
+                      ? "bg-orange-500/20 border-orange-500/30 text-orange-400"
                       : (cityData.today.tempMin - cityData.today.tempMinHistory) <= -5
                       ? "bg-blue-500/20 border-blue-500/30 text-blue-400"
                       : "bg-emerald-500/20 border-emerald-500/30 text-emerald-400"
@@ -578,7 +585,6 @@ export default function App() {
                     <Thermometer className="w-4 h-4 shrink-0" />
                   </div>
                 </div>
-
                 <div className="my-3">
                   <div className="flex items-baseline gap-2">
                     <span className="text-5xl font-black tracking-tight shrink-0">
@@ -595,12 +601,10 @@ export default function App() {
                     ) : null}
                   </div>
                 </div>
-
                 <div className="border-t border-slate-800/60 pt-3 mt-1 text-xs flex justify-between items-center">
                   <span className="text-slate-400">Media Histórica:</span>
                   <span className="font-semibold text-white">{cityData.today.tempMinHistory} ºC</span>
                 </div>
-
                 {(cityData.today.tempMin - cityData.today.tempMinHistory) >= 5 ? (
                   <div className="text-[10px] uppercase font-bold text-orange-400 mt-2 flex items-center gap-1">
                     <AlertTriangle className="w-3.5 h-3.5" /> Anomalía por Calor (+5ºC)
@@ -616,26 +620,23 @@ export default function App() {
                 )}
               </div>
 
-              {/* TARJETA 3: PLUVIOMETRÍA SEMANAL DE LA ZONA */}
+              {/* Pluviometría */}
               {(() => {
                 const pluvPercent = cityData.weeklyPluviometriaHistory > 0
                   ? (cityData.weeklyPluviometria / cityData.weeklyPluviometriaHistory) * 100
                   : 100;
                 const pluvClasses = getPluvioTailwindClasses(anomalies.pluviometria.categoria);
                 return (
-                  <div 
+                  <div
                     id="card-weekly-pluvio"
                     className={`rounded-3xl p-6 border backdrop-blur-xl transition-all duration-300 flex flex-col justify-between min-h-[170px] ${pluvClasses.bg}`}
                   >
                     <div className="flex items-center justify-between">
-                      <span className="text-xs font-bold uppercase tracking-wider text-slate-300">
-                        Pluviometría Semanal Media
-                      </span>
+                      <span className="text-xs font-bold uppercase tracking-wider text-slate-300">Pluviometría Semanal Media</span>
                       <div className={`p-2 rounded-xl border ${pluvClasses.iconContainer}`}>
                         <Droplets className="w-4 h-4 shrink-0" />
                       </div>
                     </div>
-
                     <div className="my-3">
                       <div className="flex items-baseline gap-2">
                         <span className="text-5xl font-black tracking-tight shrink-0">
@@ -649,12 +650,10 @@ export default function App() {
                         )}
                       </div>
                     </div>
-
                     <div className="border-t border-slate-800/60 pt-3 mt-1 text-xs flex justify-between items-center">
                       <span className="text-slate-400">Media Histórica:</span>
                       <span className="font-semibold text-white">{cityData.weeklyPluviometriaHistory} mm</span>
                     </div>
-
                     {anomalies.pluviometria.alerta ? (
                       <div className={`text-[10px] mt-2 flex items-center gap-1 ${pluvClasses.messageText}`}>
                         <AlertTriangle className="w-3.5 h-3.5" /> {anomalies.pluviometria.categoria}
@@ -664,23 +663,19 @@ export default function App() {
                         <CheckCircle className="w-3.5 h-3.5" /> SIN ANOMALÍAS
                       </div>
                     )}
-                    
                     <div className="text-[10px] text-slate-400 mt-1 leading-normal italic">
                       {anomalies.pluviometria.mensaje_front}
                     </div>
                   </div>
                 );
               })()}
-
             </div>
 
-            {/* GRÁFICA DE PREDICCIÓN CON RECHARTS */}
+            {/* GRÁFICA RECHARTS */}
             <div className="bg-slate-900/30 backdrop-blur-xl border border-slate-900 rounded-3xl p-6 shadow-xl" id="recharts-section">
               <div className="flex items-center justify-between mb-4">
                 <div>
-                  <h3 className="text-sm font-bold uppercase text-slate-300">
-                    Gráfica de Tendencia Térmica
-                  </h3>
+                  <h3 className="text-sm font-bold uppercase text-slate-300">Gráfica de Tendencia Térmica</h3>
                   <p className="text-slate-500 text-xs mt-0.5">
                     Comparativa de previsión ({cityData.name}) versus promedios de estabilidad histórica regional.
                   </p>
@@ -700,14 +695,9 @@ export default function App() {
                   </span>
                 </div>
               </div>
-
-              {/* Contenedor del Gráfico */}
               <div className="h-64 md:h-72 w-full pt-2">
                 <ResponsiveContainer width="100%" height="100%">
-                  <AreaChart
-                    data={chartData}
-                    margin={{ top: 10, right: 10, left: -20, bottom: 0 }}
-                  >
+                  <AreaChart data={chartData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
                     <defs>
                       <linearGradient id="gradientMax" x1="0" y1="0" x2="0" y2="1">
                         <stop offset="5%" stopColor="#f97316" stopOpacity={0.25}/>
@@ -719,69 +709,22 @@ export default function App() {
                       </linearGradient>
                     </defs>
                     <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" opacity={0.3} />
-                    <XAxis 
-                      dataKey="name" 
-                      stroke="#64748b" 
-                      fontSize={11} 
-                      tickLine={false} 
-                      axisLine={false}
-                    />
-                    <YAxis 
-                      stroke="#64748b" 
-                      fontSize={11} 
-                      tickLine={false} 
-                      axisLine={false} 
-                      domain={['auto', 'auto']}
-                    />
+                    <XAxis dataKey="name" stroke="#64748b" fontSize={11} tickLine={false} axisLine={false} />
+                    <YAxis stroke="#64748b" fontSize={11} tickLine={false} axisLine={false} domain={['auto', 'auto']} />
                     <Tooltip
-                      contentStyle={{ 
-                        backgroundColor: '#0f172a', 
-                        borderColor: '#334155', 
-                        borderRadius: '1rem',
-                        color: '#f8fafc',
-                        fontSize: '11px',
-                        boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.4)'
-                      }}
+                      contentStyle={{ backgroundColor: '#0f172a', borderColor: '#334155', borderRadius: '1rem', color: '#f8fafc', fontSize: '11px', boxShadow: '0 10px 15px -3px rgba(0,0,0,0.4)' }}
                       itemStyle={{ padding: '2px 0' }}
                     />
-                    <Area 
-                      type="monotone" 
-                      dataKey="Máx Prevista" 
-                      stroke="#f97316" 
-                      strokeWidth={3}
-                      fillOpacity={1} 
-                      fill="url(#gradientMax)" 
-                    />
-                    <Area 
-                      type="monotone" 
-                      dataKey="Máx Histórica" 
-                      stroke="#d97706" 
-                      strokeDasharray="4 4"
-                      strokeWidth={1.5}
-                      fill="none" 
-                    />
-                    <Area 
-                      type="monotone" 
-                      dataKey="Mín Prevista" 
-                      stroke="#3b82f6" 
-                      strokeWidth={3}
-                      fillOpacity={1} 
-                      fill="url(#gradientMin)" 
-                    />
-                    <Area 
-                      type="monotone" 
-                      dataKey="Mín Histórica" 
-                      stroke="#6366f1" 
-                      strokeDasharray="4 4"
-                      strokeWidth={1.5}
-                      fill="none" 
-                    />
+                    <Area type="monotone" dataKey="Máx Prevista" stroke="#f97316" strokeWidth={3} fillOpacity={1} fill="url(#gradientMax)" />
+                    <Area type="monotone" dataKey="Máx Histórica" stroke="#d97706" strokeDasharray="4 4" strokeWidth={1.5} fill="none" />
+                    <Area type="monotone" dataKey="Mín Prevista" stroke="#3b82f6" strokeWidth={3} fillOpacity={1} fill="url(#gradientMin)" />
+                    <Area type="monotone" dataKey="Mín Histórica" stroke="#6366f1" strokeDasharray="4 4" strokeWidth={1.5} fill="none" />
                   </AreaChart>
                 </ResponsiveContainer>
               </div>
             </div>
 
-            {/* PREDICCIÓN HORIZONTAL: Próximos 6 días (Requisito) */}
+            {/* PREDICCIÓN 6 DÍAS */}
             <div className="space-y-3" id="forecast-section">
               <div className="flex items-center justify-between pl-1">
                 <span className="text-xs font-bold uppercase tracking-wider text-slate-400 flex items-center gap-2">
@@ -791,12 +734,7 @@ export default function App() {
                   Lógica de Anomalía Aplicada (Tarjeta destaca en Naranja/Rojo si +-5°C)
                 </span>
               </div>
-
-              {/* Lista horizontal */}
-              <div 
-                className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-4"
-                id="forecast-list"
-              >
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-4" id="forecast-list">
                 {cityData.forecast.map((item, index) => {
                   const maxDiff = item.tempMax - item.tempMaxHistory;
                   const minDiff = item.tempMin - item.tempMinHistory;
@@ -824,42 +762,27 @@ export default function App() {
                       className={`rounded-3xl p-5 border backdrop-blur-xl transition-all duration-300 flex flex-col justify-between items-center text-center ${cardBgClass}`}
                       id={`forecast-day-card-${index}`}
                     >
-                      {/* Cabecera Tarjeta Forecast */}
                       <div className="space-y-1">
-                        <span className="text-xs font-black uppercase text-slate-400 block tracking-wider">
-                          {item.day}
-                        </span>
-                        <span className="text-[10px] text-slate-500 block">
-                          {item.date}
-                        </span>
+                        <span className="text-xs font-black uppercase text-slate-400 block tracking-wider">{item.day}</span>
+                        <span className="text-[10px] text-slate-500 block">{item.date}</span>
                       </div>
-
-                      {/* Icono Clima */}
                       <div className="my-3.5 relative">
                         {getWeatherIcon(item.weather, "w-10 h-10")}
                         {hasDayAnomaly && (
-                          <span 
-                            className={`absolute -top-1 -right-1 w-3.5 h-3.5 rounded-full flex items-center justify-center border border-slate-950 ${
-                              maxDiff >= 5 || minDiff >= 5 ? "bg-orange-500 text-slate-950" : "bg-blue-500 text-slate-100"
-                            }`}
-                            title="Desviación anómala"
-                          >
+                          <span className={`absolute -top-1 -right-1 w-3.5 h-3.5 rounded-full flex items-center justify-center border border-slate-950 ${
+                            maxDiff >= 5 || minDiff >= 5 ? "bg-orange-500 text-slate-950" : "bg-blue-500 text-slate-100"
+                          }`}>
                             <AlertTriangle className="w-2.5 h-2.5 stroke-[3]" />
                           </span>
                         )}
                       </div>
-
-                      {/* Temperaturas: Max & Min */}
                       <div className="space-y-2 w-full">
-                        {/* Temp Max */}
                         <div className="flex items-center justify-between text-xs px-1">
                           <span className="text-slate-400">Máx:</span>
                           <span className={`font-extrabold ${maxDiff >= 5 ? "text-orange-400" : maxDiff <= -5 ? "text-blue-400" : "text-slate-200"}`}>
                             {item.tempMax}º
                           </span>
                         </div>
-
-                        {/* Temp Min */}
                         <div className="flex items-center justify-between text-xs px-1">
                           <span className="text-slate-400">Mín:</span>
                           <span className={`font-bold ${minDiff >= 5 ? "text-orange-300" : minDiff <= -5 ? "text-blue-300" : "text-slate-300"}`}>
@@ -867,8 +790,6 @@ export default function App() {
                           </span>
                         </div>
                       </div>
-
-                      {/* Indicador Detallado de Anomalía por día */}
                       <div className={`mt-3.5 pt-2 border-t border-slate-850 w-full text-[9px] uppercase tracking-wider ${badgeColor}`}>
                         {badgeText}
                       </div>
@@ -878,14 +799,9 @@ export default function App() {
               </div>
             </div>
 
-
-
           </div>
         )}
-
       </div>
-
-
     </div>
   );
 }
