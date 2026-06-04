@@ -12,11 +12,17 @@ export default defineConfig(() => {
       },
     },
     server: {
-      // HMR is disabled in AI Studio via DISABLE_HMR env var.
-      // Do not modifyâfile watching is disabled to prevent flickering during agent edits.
       hmr: process.env.DISABLE_HMR !== 'true',
-      // Disable file watching when DISABLE_HMR is true to save CPU during agent edits.
       watch: process.env.DISABLE_HMR === 'true' ? null : {},
+      // Proxy /api/* to the backend. In Docker, VITE_API_URL=http://backend:8000
+      // is set as a container env var so the Vite server (not the browser) resolves it.
+      // In local dev the var is unset and falls back to http://localhost:8000.
+      proxy: {
+        '/api': {
+          target: process.env.VITE_API_URL || 'http://localhost:8000',
+          changeOrigin: true,
+        },
+      },
     },
   };
 });

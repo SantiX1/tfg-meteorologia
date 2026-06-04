@@ -1,4 +1,7 @@
-const BASE_URL = import.meta.env.VITE_API_URL ?? 'http://localhost:8000';
+// Empty string → relative URL → proxied by the Vite dev server to the backend.
+// The proxy target is configured via VITE_API_URL in vite.config.ts (Node.js context),
+// so the browser never needs to resolve the backend hostname directly.
+const BASE_URL = '';
 const GEOCODING_URL = 'https://geocoding-api.open-meteo.com/v1/search';
 
 export interface ForecastDay {
