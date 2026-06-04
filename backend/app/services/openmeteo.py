@@ -1,8 +1,6 @@
-import asyncio
-from datetime import date
+from datetime import date, timedelta
 
 import httpx
-from tenacity import retry, retry_if_exception, stop_after_attempt, wait_exponential
 
 FORECAST_URL = "https://api.open-meteo.com/v1/forecast"
 ARCHIVE_URL = "https://archive-api.open-meteo.com/v1/archive"
@@ -23,82 +21,55 @@ async def get_forecast(latitude: float, longitude: float) -> dict:
         return response.json()
 
 
-def _is_retryable(exc: httpx.HTTPStatusError) -> bool:
-    return exc.response.status_code in (429, 502)
+async def get_historical(latitude: float, longitude: float, day_of_year: int) -> list[dict]:
+    current_year = date.today().year
 
+    ref = date(current_year, 1, 1) + timedelta(days=day_of_year - 1)
+    try:
+        start_date = ref.replace(year=current_year - 10)
+    except ValueError:
+        start_date = date(current_year - 10, ref.month, 28)
+    try:
+        end_date = ref.replace(year=current_year - 1)
+    except ValueError:
+        end_date = date(current_year - 1, ref.month, 28)
 
-@retry(
-    stop=stop_after_attempt(5),
-    wait=wait_exponential(multiplier=2, min=4, max=60),
-    retry=retry_if_exception(_is_retryable),
-    reraise=True,
-)
-async def _fetch_decade(
-    client: httpx.AsyncClient,
-    latitude: float,
-    longitude: float,
-    start_year: int,
-    end_year: int,
-) -> dict:
     params = {
         "latitude": latitude,
         "longitude": longitude,
         "daily": DAILY_VARS,
         "timezone": "UTC",
-        "start_date": f"{start_year}-01-01",
-        "end_date": f"{end_year}-12-31",
+        "start_date": start_date.isoformat(),
+        "end_date": end_date.isoformat(),
     }
-    response = await client.get(ARCHIVE_URL, params=params)
-    response.raise_for_status()
-    return response.json()
-
-
-async def get_historical(latitude: float, longitude: float, day_of_year: int) -> list[dict]:
-    current_year = date.today().year
-    end_year = current_year - 1
-    start_year = current_year - 30
-
-    # Build decade ranges sequentially to avoid rate limiting (429)
-    decades: list[tuple[int, int]] = []
-    year = start_year
-    while year <= end_year:
-        decades.append((year, min(year + 9, end_year)))
-        year += 10
-
-    results: list[dict] = []
     async with httpx.AsyncClient(timeout=60.0) as client:
-        for i, (s, e) in enumerate(decades):
-            if i > 0:
-                await asyncio.sleep(0.5)
-            chunk = await _fetch_decade(client, latitude, longitude, s, e)
-            results.append(chunk)
+        response = await client.get(ARCHIVE_URL, params=params)
+        response.raise_for_status()
+        chunk = response.json()
 
-    # Merge all daily data, keeping only entries matching the requested day_of_year
     records: list[dict] = []
-    for chunk in results:
-        daily = chunk.get("daily", {})
-        dates = daily.get("time", [])
-        tmax_list = daily.get("temperature_2m_max", [])
-        tmin_list = daily.get("temperature_2m_min", [])
-        precip_list = daily.get("precipitation_sum", [])
+    daily = chunk.get("daily", {})
+    dates = daily.get("time", [])
+    tmax_list = daily.get("temperature_2m_max", [])
+    tmin_list = daily.get("temperature_2m_min", [])
+    precip_list = daily.get("precipitation_sum", [])
 
-        for i, d in enumerate(dates):
-            parsed = date.fromisoformat(d)
-            # date.timetuple().tm_yday gives day-of-year
-            if parsed.timetuple().tm_yday == day_of_year:
-                tmax = tmax_list[i]
-                tmin = tmin_list[i]
-                precip = precip_list[i]
-                if tmax is None or tmin is None or precip is None:
-                    continue
-                records.append(
-                    {
-                        "date": d,
-                        "year": parsed.year,
-                        "tmax": tmax,
-                        "tmin": tmin,
-                        "precip": precip,
-                    }
-                )
+    for i, d in enumerate(dates):
+        parsed = date.fromisoformat(d)
+        if parsed.timetuple().tm_yday == day_of_year:
+            tmax = tmax_list[i]
+            tmin = tmin_list[i]
+            precip = precip_list[i]
+            if tmax is None or tmin is None or precip is None:
+                continue
+            records.append(
+                {
+                    "date": d,
+                    "year": parsed.year,
+                    "tmax": tmax,
+                    "tmin": tmin,
+                    "precip": precip,
+                }
+            )
 
     return records
