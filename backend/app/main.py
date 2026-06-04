@@ -1,12 +1,23 @@
+from contextlib import asynccontextmanager
+
 from fastapi import Depends, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.db.database import get_db
+from app.db.database import engine, get_db
+from app.db.models import Base
 from app.routers import weather
 
-app = FastAPI(title="Climatica API")
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    async with engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
+    yield
+
+
+app = FastAPI(title="Climatica API", lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,
