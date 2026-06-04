@@ -3,7 +3,8 @@ from datetime import date
 
 import httpx
 
-BASE_URL = "https://api.open-meteo.com/v1"
+FORECAST_URL = "https://api.open-meteo.com/v1/forecast"
+ARCHIVE_URL = "https://archive-api.open-meteo.com/v1/archive"
 DAILY_VARS = "temperature_2m_max,temperature_2m_min,precipitation_sum"
 
 
@@ -16,7 +17,7 @@ async def get_forecast(latitude: float, longitude: float) -> dict:
         "forecast_days": 7,
     }
     async with httpx.AsyncClient() as client:
-        response = await client.get(f"{BASE_URL}/forecast", params=params)
+        response = await client.get(FORECAST_URL, params=params)
         response.raise_for_status()
         return response.json()
 
@@ -36,7 +37,7 @@ async def _fetch_decade(
         "start_date": f"{start_year}-01-01",
         "end_date": f"{end_year}-12-31",
     }
-    response = await client.get(f"{BASE_URL}/archive", params=params)
+    response = await client.get(ARCHIVE_URL, params=params)
     response.raise_for_status()
     return response.json()
 
