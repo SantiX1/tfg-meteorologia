@@ -45,19 +45,22 @@ async def _fetch_decade(
 async def get_historical(latitude: float, longitude: float, day_of_year: int) -> list[dict]:
     current_year = date.today().year
     end_year = current_year - 1
-    start_year = current_year - 50
+    start_year = current_year - 30
 
-    # Build decade ranges: [start_year, start_year+9], ..., up to end_year
+    # Build decade ranges sequentially to avoid rate limiting (429)
     decades: list[tuple[int, int]] = []
     year = start_year
     while year <= end_year:
         decades.append((year, min(year + 9, end_year)))
         year += 10
 
+    results: list[dict] = []
     async with httpx.AsyncClient(timeout=30.0) as client:
-        results = await asyncio.gather(
-            *[_fetch_decade(client, latitude, longitude, s, e) for s, e in decades]
-        )
+        for i, (s, e) in enumerate(decades):
+            if i > 0:
+                await asyncio.sleep(0.5)
+            chunk = await _fetch_decade(client, latitude, longitude, s, e)
+            results.append(chunk)
 
     # Merge all daily data, keeping only entries matching the requested day_of_year
     records: list[dict] = []
