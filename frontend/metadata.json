@@ -1,0 +1,6 @@
+{
+  "name": "Weather Dashboard",
+  "description": "Weather application with climate anomaly detection and predictions for cities.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
