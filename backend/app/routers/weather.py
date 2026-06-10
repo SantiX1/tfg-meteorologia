@@ -79,6 +79,7 @@ async def get_weather(
         {
             "date": day["date"].isoformat(),
             "day_offset": day["day_offset"],
+            "day_of_year": day["day_of_year"],
             "tmax": day["tmax"],
             "tmin": day["tmin"],
             "precip": day["precip"],

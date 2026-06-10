@@ -71,7 +71,7 @@ function mapResponseToCityData(r: WeatherResponse) {
 
   const mapDay = (day: WeatherResponse['forecast'][0]) => {
     const d = parseDate(day.date);
-    const normal = normalByDoy[getDayOfYear(d)] ?? null;
+    const normal = normalByDoy[day.day_of_year] ?? null;
     return {
       date: d,
       weather: weatherFromPrecip(day.precip),

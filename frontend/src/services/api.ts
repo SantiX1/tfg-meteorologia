@@ -7,6 +7,7 @@ const GEOCODING_URL = 'https://geocoding-api.open-meteo.com/v1/search';
 export interface ForecastDay {
   date: string;
   day_offset: number;
+  day_of_year: number;
   tmax: number;
   tmin: number;
   precip: number;

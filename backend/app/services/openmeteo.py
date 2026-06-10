@@ -1,4 +1,4 @@
-from datetime import date, timedelta
+from datetime import date
 
 import httpx
 
@@ -21,18 +21,19 @@ async def get_forecast(latitude: float, longitude: float) -> dict:
         return response.json()
 
 
-async def get_historical(latitude: float, longitude: float, day_of_year: int) -> list[dict]:
+async def get_historical_batch(
+    latitude: float,
+    longitude: float,
+    days_of_year: list[int],
+) -> dict[int, list[dict]]:
+    """
+    Single archive request covering 10 full years.
+    Returns records grouped by day_of_year, filtered to only the requested days.
+    One HTTP call replaces N separate calls, avoiding rate limiting.
+    """
     current_year = date.today().year
-
-    ref = date(current_year, 1, 1) + timedelta(days=day_of_year - 1)
-    try:
-        start_date = ref.replace(year=current_year - 10)
-    except ValueError:
-        start_date = date(current_year - 10, ref.month, 28)
-    try:
-        end_date = ref.replace(year=current_year - 1)
-    except ValueError:
-        end_date = date(current_year - 1, ref.month, 28)
+    start_date = date(current_year - 10, 1, 1)
+    end_date = date(current_year - 1, 12, 31)
 
     params = {
         "latitude": latitude,
@@ -42,12 +43,16 @@ async def get_historical(latitude: float, longitude: float, day_of_year: int) ->
         "start_date": start_date.isoformat(),
         "end_date": end_date.isoformat(),
     }
-    async with httpx.AsyncClient(timeout=60.0) as client:
+    async with httpx.AsyncClient(timeout=120.0) as client:
         response = await client.get(ARCHIVE_URL, params=params)
         response.raise_for_status()
         chunk = response.json()
 
-    records: list[dict] = []
+    if chunk.get("error"):
+        raise ValueError(f"Archive API error: {chunk.get('reason', 'unknown')}")
+
+    result: dict[int, list[dict]] = {doy: [] for doy in days_of_year}
+    days_set = set(days_of_year)
     daily = chunk.get("daily", {})
     dates = daily.get("time", [])
     tmax_list = daily.get("temperature_2m_max", [])
@@ -56,20 +61,22 @@ async def get_historical(latitude: float, longitude: float, day_of_year: int) ->
 
     for i, d in enumerate(dates):
         parsed = date.fromisoformat(d)
-        if parsed.timetuple().tm_yday == day_of_year:
-            tmax = tmax_list[i]
-            tmin = tmin_list[i]
-            precip = precip_list[i]
-            if tmax is None or tmin is None or precip is None:
-                continue
-            records.append(
-                {
-                    "date": d,
-                    "year": parsed.year,
-                    "tmax": tmax,
-                    "tmin": tmin,
-                    "precip": precip,
-                }
-            )
+        doy = parsed.timetuple().tm_yday
+        if doy not in days_set:
+            continue
+        tmax = tmax_list[i]
+        tmin = tmin_list[i]
+        precip = precip_list[i]
+        if tmax is None or tmin is None or precip is None:
+            continue
+        result[doy].append(
+            {
+                "date": d,
+                "year": parsed.year,
+                "tmax": tmax,
+                "tmin": tmin,
+                "precip": precip,
+            }
+        )
 
-    return records
+    return result

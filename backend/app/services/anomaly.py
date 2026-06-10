@@ -20,7 +20,7 @@ def _temp_category(difference: float) -> str:
         return "Anomalía cálida"
     if difference < -TEMP_THRESHOLD:
         return "Anomalía fría"
-    return "Normal"
+    return "Sin anomalías"
 
 
 def calculate_anomaly(forecast_data: list[dict], normals_data: dict[int, dict]) -> dict:
