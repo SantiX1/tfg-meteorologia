@@ -1,6 +1,7 @@
 from datetime import date
 
-from fastapi import APIRouter, Depends, Query
+import httpx
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db import crud
@@ -66,10 +67,22 @@ async def get_weather(
             for doy, n in normals_db.items()
         }
     else:
-        raw_forecast = await openmeteo.get_forecast(lat, lon)
+        try:
+            raw_forecast = await openmeteo.get_forecast(lat, lon)
+        except (httpx.ConnectError, httpx.TimeoutException) as exc:
+            raise HTTPException(
+                status_code=503,
+                detail="El servicio meteorológico no está disponible temporalmente. Inténtalo de nuevo en unos segundos.",
+            ) from exc
         forecast_list = _parse_forecast(raw_forecast)
         days_of_year = [d["day_of_year"] for d in forecast_list]
-        normals_dict = await get_or_calculate_normals(db, location.id, lat, lon, days_of_year)
+        try:
+            normals_dict = await get_or_calculate_normals(db, location.id, lat, lon, days_of_year)
+        except (httpx.ConnectError, httpx.TimeoutException) as exc:
+            raise HTTPException(
+                status_code=503,
+                detail="El servicio meteorológico no está disponible temporalmente. Inténtalo de nuevo en unos segundos.",
+            ) from exc
         await crud.save_forecast(db, location.id, forecast_list)
 
     anomaly = anomaly_service.calculate_anomaly(forecast_list, normals_dict)

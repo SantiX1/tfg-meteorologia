@@ -1,12 +1,21 @@
 from datetime import date
 
 import httpx
+from tenacity import retry, retry_if_exception_type, stop_after_attempt, wait_exponential
 
 FORECAST_URL = "https://api.open-meteo.com/v1/forecast"
 ARCHIVE_URL = "https://archive-api.open-meteo.com/v1/archive"
 DAILY_VARS = "temperature_2m_max,temperature_2m_min,precipitation_sum"
 
+_RETRY = retry(
+    retry=retry_if_exception_type((httpx.ConnectError, httpx.TimeoutException)),
+    wait=wait_exponential(multiplier=1, min=2, max=30),
+    stop=stop_after_attempt(4),
+    reraise=True,
+)
 
+
+@_RETRY
 async def get_forecast(latitude: float, longitude: float) -> dict:
     params = {
         "latitude": latitude,
@@ -21,6 +30,7 @@ async def get_forecast(latitude: float, longitude: float) -> dict:
         return response.json()
 
 
+@_RETRY
 async def get_historical_batch(
     latitude: float,
     longitude: float,
