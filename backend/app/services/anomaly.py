@@ -5,6 +5,8 @@ PRECIP_CATEGORIES = [
     (140, 200, "Muy húmedo"),
 ]
 
+PRECIP_MIN_HISTORICAL_MM = 2.0  # below this, differences are climatologically insignificant
+
 TEMP_THRESHOLD = 5.0  # °C
 
 
@@ -35,8 +37,9 @@ def calculate_anomaly(forecast_data: list[dict], normals_data: dict[int, dict]) 
         if d["day_of_year"] in normals_data
     )
 
-    if historical_precip_total == 0:
-        precip_result = {"category": "Sin referencia", "anomaly_pct": None}
+    if historical_precip_total < PRECIP_MIN_HISTORICAL_MM:
+        # Covers division-by-zero (== 0) and climatologically insignificant baselines
+        precip_result = {"category": "Normal", "anomaly_pct": None}
     else:
         anomaly_pct = (forecast_precip_total / historical_precip_total) * 100
         precip_result = {
