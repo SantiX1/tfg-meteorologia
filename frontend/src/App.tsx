@@ -102,6 +102,8 @@ function mapResponseToCityData(r: WeatherResponse) {
     },
     weeklyPluviometria,
     weeklyPluviometriaHistory,
+    precipAnomalyPct: r.precip_anomaly.value_pct,
+    precipAnomalyCategory: r.precip_anomaly.category,
     forecast: r.forecast.slice(1).map(day => {
       const m = mapDay(day);
       return {
@@ -267,11 +269,22 @@ export default function App() {
     }
   };
 
+  const PLUVIO_NORMAL_FALLBACK = {
+    categoria: "Normal",
+    mensaje_front: "Precipitación dentro de los rangos históricos normales para esta fecha (100.0%).",
+    alerta: false,
+    color_hex: "#388E3C",
+  };
+
   const anomalies = useMemo(() => {
     if (!cityData) return null;
     const tMax = getTempAnomalyInfo(cityData.today.tempMax, cityData.today.tempMaxHistory);
     const tMin = getTempAnomalyInfo(cityData.today.tempMin, cityData.today.tempMinHistory);
-    const pluv = getPluvioAnomalyInfo(cityData.weeklyPluviometria, cityData.weeklyPluviometriaHistory);
+    // When the backend marks value_pct as null, the historical baseline is too low to be
+    // climatologically meaningful (e.g. dry-season weeks). Trust the backend's "Normal" call.
+    const pluv = cityData.precipAnomalyPct === null
+      ? PLUVIO_NORMAL_FALLBACK
+      : getPluvioAnomalyInfo(cityData.weeklyPluviometria, cityData.weeklyPluviometriaHistory);
     return {
       max: tMax,
       min: tMin,
