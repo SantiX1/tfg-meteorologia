@@ -91,21 +91,3 @@ async def get_normals(
     )
     result = await db.execute(stmt)
     return {row.day_of_year: row for row in result.scalars().all()}
-
-
-async def save_normals(
-    db: AsyncSession, location_id: int, normals_data: dict[int, dict]
-) -> None:
-    for day_of_year, data in normals_data.items():
-        db.add(
-            ClimateNormal(
-                location_id=location_id,
-                day_of_year=day_of_year,
-                month=data["month"],
-                reference_years=data.get("reference_years", 50),
-                tmax_mean=data["tmax_mean"],
-                tmin_mean=data["tmin_mean"],
-                precip_mean=data["precip_mean"],
-            )
-        )
-    await db.commit()

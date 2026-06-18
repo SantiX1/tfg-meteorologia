@@ -51,12 +51,6 @@ const parseDate = (s: string) => {
   return new Date(y, m - 1, d);
 };
 
-// Matches Python's date.timetuple().tm_yday (1-based)
-const getDayOfYear = (d: Date) => {
-  const start = new Date(d.getFullYear(), 0, 0); // Dec 31 of previous year
-  return Math.floor((d.getTime() - start.getTime()) / 86_400_000);
-};
-
 const weatherFromPrecip = (precip: number): 'clear' | 'cloudy' | 'rainy' => {
   if (precip >= 5) return 'rainy';
   if (precip >= 0.5) return 'cloudy';
