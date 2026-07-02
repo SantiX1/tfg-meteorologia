@@ -358,7 +358,7 @@ export default function App() {
                 <CloudSun className="w-10 h-10 text-slate-950 stroke-[2]" />
               </div>
               <h1 className="text-3xl font-bold tracking-tight text-white mt-4">
-                Monitoreo Climático
+                Normal Climática
               </h1>
               <p className="text-slate-400 text-sm max-w-xs leading-relaxed">
                 Visualización de previsión diaria y semanal con detección en tiempo real de anomalías históricas.
